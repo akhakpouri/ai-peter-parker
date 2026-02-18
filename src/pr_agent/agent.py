@@ -90,27 +90,28 @@ def tool_call(name: str, inputs: dict) -> str:
     
 def run_agent(prompt: str) -> str:
     messages = [{"role": "user", "content": prompt}]
-    response = client.chat.completions.create(
-        model = MODEL,
-        tools = TOOLS,
-        tool_choice = "auto",
-        messages = messages
-    )
+    while True:
+        response = client.messages.create(
+            model = MODEL,
+            max_tokens=4096,
+            tools = TOOLS,
+            messages = messages
+        )
 
-    # If the stop reason is "end_turn", it means the model has finished its response and is not calling a tool
-    if response.stop_reason == "end_turn":
-            return next(b.text for b in response.content if hasattr(b, "text"))
-    
-    # Handle tool calls and collect results
-    results = []
-    for block in response.content:
-        if hasattr(block, "tool_calls"):
-            result = tool_call(block.name, block.input)
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": result
-            })
+        # If the stop reason is "end_turn", it means the model has finished its response and is not calling a tool
+        if response.stop_reason == "end_turn":
+                return next(b.text for b in response.content if hasattr(b, "text"))
+        
+        # Handle tool calls and collect results
+        results = []
+        for block in response.content:
+            if hasattr(block, "tool_calls"):
+                result = tool_call(block.name, block.input)
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result
+                })
 
-    messages.append({"role": "assistant", "content": response.content})
-    messages.append({"role": "user", "content": results})
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": results})
