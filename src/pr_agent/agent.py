@@ -1,26 +1,29 @@
-import anthropic
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 from pr_agent.github import list_pull_requests, view_pull_request, comment_on_pull_request, review_pull_request, merge_pull_request
 
+import anthropic
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-haiku-4-5"
 
 TOOLS = [
     {
         "name": "list_prs",
-        "description": "List open pull requests in the specified repository.",
-        "parameters": {
+        "description": "List open pull requests for a repo",
+        "input_schema": {
             "type": "object",
             "properties": {
-                "repo": {"type": "string", "description": "owner/repo"}
+                "repo": {"type": "string", "description": "owner/repo format"}
             },
             "required": ["repo"]
         }
     },
     {
-        "name": "view_prs",
-        "description": "View details of a specific pull request, and comments on the pull request.",
-        "parameters": {
+        "name": "view_pr",
+        "description": "View details, diff, and comments of a PR",
+        "input_schema": {
             "type": "object",
             "properties": {
                 "repo": {"type": "string"},
@@ -30,36 +33,39 @@ TOOLS = [
         }
     },
     {
-        "name": "comment_on_prs",
-        "description": "Add a comment to a specific pull request.",
-        "parameters": {
+        "name": "comment_pr",
+        "description": "Post a general comment on a PR",
+        "input_schema": {
             "type": "object",
             "properties": {
                 "repo": {"type": "string"},
                 "pr_number": {"type": "integer"},
-                "comment": {"type": "string"}
+                "body": {"type": "string"}
             },
-            "required": ["repo", "pr_number", "comment"]
+            "required": ["repo", "pr_number", "body"]
         }
     },
     {
-        "name": "review_prs",
-        "description": "Submit a review on a specific pull request.",
-        "parameters": {
+        "name": "review_pr",
+        "description": "Submit a formal review: COMMENT, APPROVE, or REQUEST_CHANGES",
+        "input_schema": {
             "type": "object",
             "properties": {
                 "repo": {"type": "string"},
                 "pr_number": {"type": "integer"},
-                "comment": {"type": "string"},
-                "event": {"type": "string", "enum": ["APPROVE", "REQUEST_CHANGES", "COMMENT"]}
+                "body": {"type": "string"},
+                "event": {
+                    "type": "string",
+                    "enum": ["COMMENT", "APPROVE", "REQUEST_CHANGES"]
+                }
             },
-            "required": ["repo", "pr_number", "comment", "event"]
+            "required": ["repo", "pr_number", "body", "event"]
         }
     },
     {
-        "name": "merge_prs",
-        "description": "Merge a specific pull request.",
-        "parameters": {
+        "name": "merge_pr",
+        "description": "Merge a PR",
+        "input_schema": {
             "type": "object",
             "properties": {
                 "repo": {"type": "string"},
@@ -70,23 +76,27 @@ TOOLS = [
     }
 ]
 
+
 def tool_call(name: str, inputs: dict) -> str:
-    if name == "list_prs":
-        return json.dumps(list_pull_requests(**inputs))
-    elif name == "view_prs":
-        result = view_pull_request(**inputs)
-        return json.dumps(result)
-    elif name == "comment_on_prs":
-        comment_on_pull_request(**inputs)
-        return "Comment added successfully."
-    elif name == "review_prs":
-        review_pull_request(**inputs)
-        return "Review submitted successfully."
-    elif name == "merge_prs":
-        merge_pull_request(**inputs)
-        return "Pull request merged successfully."
-    else:
-        raise ValueError(f"Unknown tool: {name}")
+    try:
+        if name == "list_prs":
+            return json.dumps(list_pull_requests(**inputs))
+        elif name == "view_pr":
+            result = view_pull_request(**inputs)
+            return json.dumps(result)
+        elif name == "comment_pr":
+            comment_on_pull_request(**inputs)
+            return "Comment added successfully."
+        elif name == "review_pr":
+            review_pull_request(**inputs)
+            return "Review submitted successfully."
+        elif name == "merge_pr":
+            merge_pull_request(**inputs)
+            return "Pull request merged successfully."
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+    except Exception as e:
+        return f"Error calling tool {name}: {str(e)}"
     
 def run_agent(prompt: str) -> str:
     messages = [{"role": "user", "content": prompt}]
@@ -102,16 +112,24 @@ def run_agent(prompt: str) -> str:
         if response.stop_reason == "end_turn":
                 return next(b.text for b in response.content if hasattr(b, "text"))
         
+        # If no tool calls, also return
+        if response.stop_reason != "tool_use":
+            return str(response.content)
+        
         # Handle tool calls and collect results
         results = []
         for block in response.content:
-            if hasattr(block, "tool_calls"):
+            if block.type == "tool_use":
                 result = tool_call(block.name, block.input)
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
                     "content": result
                 })
+        
+        # Only append if we actually have results
+        if not results:
+            break
 
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": results})
