@@ -1,0 +1,23 @@
+name: PR Agent
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  pr-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run PR Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          uv run python -m pr_agent.main "Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}"
