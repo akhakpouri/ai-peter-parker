@@ -35,4 +35,4 @@ jobs:
             echo
             cat agent-output.txt
           } > pr-comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file pr-comment.md
+        gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file pr-comment.md
