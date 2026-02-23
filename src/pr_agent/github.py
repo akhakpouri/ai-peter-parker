@@ -23,9 +23,9 @@ def view_pull_request(repo: str, pr_number: int) -> dict:
                      "number,title,body"])
     return json.loads(output)
 
-def comment_on_pull_request(repo: str, pr_number: int, body: str) -> None:
+def comment_on_pull_request(repo: str, pr_number: int, comment: str) -> None:
     """Add a comment to a specific pull request."""
-    run_gh(["pr", "comment", str(pr_number), "--repo", repo, "--body", body])
+    run_gh(["pr", "comment", str(pr_number), "--repo", repo, "--body", comment])
 
 def review_pull_request(repo: str, pr_number: int, body: str, event: str) -> None:
     """Submit a review on a specific pull request."""
@@ -33,11 +33,10 @@ def review_pull_request(repo: str, pr_number: int, body: str, event: str) -> Non
         "COMMENT": "--comment",
         "APPROVE": "--approve",
         "REQUEST_CHANGES": "--request-changes",
-    }
-    flag = event_to_flag.get(event)
-    if not flag:
+    }[event]
+    if not event_to_flag:
         raise ValueError(f"Invalid review event: {event}")
-    run_gh(["pr", "review", str(pr_number), "--repo", repo, flag, "--body", body])
+    run_gh(["pr", "review", str(pr_number), "--repo", repo, event_to_flag, "--body", body])
 
 def merge_pull_request(repo: str, pr_number: int) -> None:
     """Merge a specific pull request."""
