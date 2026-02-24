@@ -1,0 +1,20 @@
+name: PR Agent Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - use: ./
+        with:
+          anthripy-api-key: ${{ secrets.ANTHROPY_API_KEY }}
+          pr-number: ${{ github.event.pull_request.number }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
